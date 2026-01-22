@@ -5,21 +5,22 @@ import { auth } from "@clerk/nextjs/server";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+const model = genAI.getGenerativeModel({ model: "gemini-3-flash-preview" });
 
 export async function generateQuiz() {
-  const { userId } = await auth();
-  if (!userId) throw new Error("Unauthorized");
+  try {
+    const { userId } = await auth();
+    if (!userId) throw new Error("Unauthorized");
 
-  const user = await db.user.findUnique({
-    where: { clerkUserId: userId },
-    select: {
-      industry: true,
-      skills: true,
-    },
-  });
+    const user = await db.user.findUnique({
+      where: { clerkUserId: userId },
+      select: {
+        industry: true,
+        skills: true,
+      },
+    });
 
-  if (!user) throw new Error("User not found");
+    if (!user) throw new Error("User not found");
 
   const prompt = `
     Generate 10 technical interview questions for a ${
@@ -43,29 +44,44 @@ export async function generateQuiz() {
     }
   `;
 
-  try {
     const result = await model.generateContent(prompt);
     const response = result.response;
     const text = response.text();
     const cleanedText = text.replace(/```(?:json)?\n?/g, "").trim();
-    const quiz = JSON.parse(cleanedText);
+    
+    let quiz;
+    try {
+      quiz = JSON.parse(cleanedText);
+    } catch (parseError) {
+      console.error("Error parsing quiz JSON:", parseError);
+      console.error("Raw response:", cleanedText);
+      throw new Error("Failed to parse AI response. Please try again.");
+    }
+
+    if (!quiz.questions || !Array.isArray(quiz.questions)) {
+      throw new Error("Invalid quiz format received from AI.");
+    }
 
     return quiz.questions;
   } catch (error) {
     console.error("Error generating quiz:", error);
-    throw new Error("Failed to generate quiz questions");
+    if (error.message === "Unauthorized" || error.message === "User not found") {
+      throw error;
+    }
+    throw new Error("Failed to generate quiz questions. Please try again later.");
   }
 }
 
 export async function saveQuizResult(questions, answers, score) {
-  const { userId } = await auth();
-  if (!userId) throw new Error("Unauthorized");
+  try {
+    const { userId } = await auth();
+    if (!userId) throw new Error("Unauthorized");
 
-  const user = await db.user.findUnique({
-    where: { clerkUserId: userId },
-  });
+    const user = await db.user.findUnique({
+      where: { clerkUserId: userId },
+    });
 
-  if (!user) throw new Error("User not found");
+    if (!user) throw new Error("User not found");
 
   const questionResults = questions.map((q, index) => ({
     question: q.question,
@@ -110,7 +126,6 @@ export async function saveQuizResult(questions, answers, score) {
     }
   }
 
-  try {
     const assessment = await db.assessment.create({
       data: {
         userId: user.id,
@@ -124,21 +139,24 @@ export async function saveQuizResult(questions, answers, score) {
     return assessment;
   } catch (error) {
     console.error("Error saving quiz result:", error);
-    throw new Error("Failed to save quiz result");
+    if (error.message === "Unauthorized" || error.message === "User not found") {
+      throw error;
+    }
+    throw new Error("Failed to save quiz result. Please try again later.");
   }
 }
 
 export async function getAssessments() {
-  const { userId } = await auth();
-  if (!userId) throw new Error("Unauthorized");
-
-  const user = await db.user.findUnique({
-    where: { clerkUserId: userId },
-  });
-
-  if (!user) throw new Error("User not found");
-
   try {
+    const { userId } = await auth();
+    if (!userId) throw new Error("Unauthorized");
+
+    const user = await db.user.findUnique({
+      where: { clerkUserId: userId },
+    });
+
+    if (!user) throw new Error("User not found");
+
     const assessments = await db.assessment.findMany({
       where: {
         userId: user.id,
@@ -151,6 +169,9 @@ export async function getAssessments() {
     return assessments;
   } catch (error) {
     console.error("Error fetching assessments:", error);
-    throw new Error("Failed to fetch assessments");
+    if (error.message === "Unauthorized" || error.message === "User not found") {
+      throw error;
+    }
+    throw new Error("Failed to fetch assessments. Please try again later.");
   }
 }

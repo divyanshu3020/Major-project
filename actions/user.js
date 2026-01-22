@@ -6,16 +6,15 @@ import { revalidatePath } from "next/cache";
 import { generateAIInsights } from "./dashboard";
 
 export async function updateUser(data) {
-  const { userId } = await auth();
-  if (!userId) throw new Error("Unauthorized");
-
-  const user = await db.user.findUnique({
-    where: { clerkUserId: userId },
-  });
-
-  if (!user) throw new Error("User not found");
-
   try {
+    const { userId } = await auth();
+    if (!userId) throw new Error("Unauthorized");
+
+    const user = await db.user.findUnique({
+      where: { clerkUserId: userId },
+    });
+
+    if (!user) throw new Error("User not found");
     // Start a transaction to handle both operations
     const result = await db.$transaction(
       async (tx) => {
@@ -60,24 +59,21 @@ export async function updateUser(data) {
     );
 
     revalidatePath("/");
-    return result.user;
+    return result.updatedUser;
   } catch (error) {
     console.error("Error updating user and industry:", error.message);
-    throw new Error("Failed to update profile");
+    if (error.message === "Unauthorized" || error.message === "User not found") {
+      throw error;
+    }
+    throw new Error("Failed to update profile. Please try again later.");
   }
 }
 
 export async function getUserOnboardingStatus() {
-  const { userId } = await auth();
-  if (!userId) throw new Error("Unauthorized");
-
-  const user = await db.user.findUnique({
-    where: { clerkUserId: userId },
-  });
-
-  if (!user) throw new Error("User not found");
-
   try {
+    const { userId } = await auth();
+    if (!userId) throw new Error("Unauthorized");
+
     const user = await db.user.findUnique({
       where: {
         clerkUserId: userId,
@@ -87,11 +83,21 @@ export async function getUserOnboardingStatus() {
       },
     });
 
+    // If user doesn't exist, they're not onboarded
+    if (!user) {
+      return {
+        isOnboarded: false,
+      };
+    }
+
     return {
       isOnboarded: !!user?.industry,
     };
   } catch (error) {
     console.error("Error checking onboarding status:", error);
-    throw new Error("Failed to check onboarding status");
+    // Return not onboarded on error instead of throwing
+    return {
+      isOnboarded: false,
+    };
   }
 }

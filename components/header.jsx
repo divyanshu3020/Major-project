@@ -20,7 +20,13 @@ import Image from "next/image";
 import { checkUser } from "@/lib/checkUser";
 
 export default async function Header() {
-  await checkUser();
+  // Silently handle checkUser - don't let it break the header
+  try {
+    await checkUser();
+  } catch (error) {
+    // Silently fail - header should still render
+    console.error("Error in Header checkUser:", error.message);
+  }
 
   return (
     <header className="fixed top-0 w-full border-b bg-background/80 backdrop-blur-md z-50 supports-[backdrop-filter]:bg-background/60">

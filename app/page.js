@@ -58,7 +58,7 @@ export default function LandingPage() {
       </section>
 
       {/* Stats Section */}
-      <section className="w-full py-12 md:py-24 bg-muted/50">
+      {/* <section className="w-full py-12 md:py-24 bg-muted/50">
         <div className="container mx-auto px-4 md:px-6">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-8 max-w-4xl mx-auto text-center">
             <div className="flex flex-col items-center justify-center space-y-2">
@@ -79,7 +79,7 @@ export default function LandingPage() {
             </div>
           </div>
         </div>
-      </section>
+      </section> */}
 
       {/* How It Works Section */}
       <section className="w-full py-12 md:py-24 bg-background">
@@ -108,7 +108,7 @@ export default function LandingPage() {
         </div>
       </section>
 
-      <section className="w-full py-12 md:py-24 bg-muted/50">
+      {/* <section className="w-full py-12 md:py-24 bg-muted/50">
         <div className="container mx-auto px-4 md:px-6">
           <h2 className="text-3xl font-bold text-center mb-12">
             What Our Users Say
@@ -155,7 +155,7 @@ export default function LandingPage() {
             ))}
           </div>
         </div>
-      </section>
+      </section> */}
 
       {/* FAQ Section */}
       <section className="w-full py-12 md:py-24">

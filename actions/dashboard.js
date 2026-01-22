@@ -5,7 +5,7 @@ import { auth } from "@clerk/nextjs/server";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+const model = genAI.getGenerativeModel({ model: "gemini-3-flash-preview" });
 
 export const generateAIInsights = async (industry) => {
   const prompt = `
@@ -28,41 +28,82 @@ export const generateAIInsights = async (industry) => {
           Include at least 5 skills and trends.
         `;
 
-  const result = await model.generateContent(prompt);
-  const response = result.response;
-  const text = response.text();
-  const cleanedText = text.replace(/```(?:json)?\n?/g, "").trim();
+  try {
+    const result = await model.generateContent(prompt);
+    const response = result.response;
+    const text = response.text();
+    const cleanedText = text.replace(/```(?:json)?\n?/g, "").trim();
 
-  return JSON.parse(cleanedText);
+    let insights;
+    try {
+      insights = JSON.parse(cleanedText);
+    } catch (parseError) {
+      console.error("Error parsing insights JSON:", parseError);
+      console.error("Raw response:", cleanedText);
+      // Return default insights if parsing fails
+      return {
+        salaryRanges: [],
+        growthRate: 0,
+        demandLevel: "Medium",
+        topSkills: [],
+        marketOutlook: "Neutral",
+        keyTrends: [],
+        recommendedSkills: []
+      };
+    }
+
+    return insights;
+  } catch (error) {
+    console.error("Error generating AI insights:", error);
+    // Return default insights on error
+    return {
+      salaryRanges: [],
+      growthRate: 0,
+      demandLevel: "Medium",
+      topSkills: [],
+      marketOutlook: "Neutral",
+      keyTrends: [],
+      recommendedSkills: []
+    };
+  }
 };
 
 export async function getIndustryInsights() {
-  const { userId } = await auth();
-  if (!userId) throw new Error("Unauthorized");
+  try {
+    const { userId } = await auth();
+    if (!userId) throw new Error("Unauthorized");
 
-  const user = await db.user.findUnique({
-    where: { clerkUserId: userId },
-    include: {
-      industryInsight: true,
-    },
-  });
-
-  if (!user) throw new Error("User not found");
-
-  // If no insights exist, generate them
-  if (!user.industryInsight) {
-    const insights = await generateAIInsights(user.industry);
-
-    const industryInsight = await db.industryInsight.create({
-      data: {
-        industry: user.industry,
-        ...insights,
-        nextUpdate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+    const user = await db.user.findUnique({
+      where: { clerkUserId: userId },
+      include: {
+        industryInsight: true,
       },
     });
 
-    return industryInsight;
-  }
+    if (!user) throw new Error("User not found");
+    if (!user.industry) throw new Error("User industry not set");
 
-  return user.industryInsight;
+    // If no insights exist, generate them
+    if (!user.industryInsight) {
+      const insights = await generateAIInsights(user.industry);
+
+      const industryInsight = await db.industryInsight.create({
+        data: {
+          industry: user.industry,
+          ...insights,
+          nextUpdate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        },
+      });
+
+      return industryInsight;
+    }
+
+    return user.industryInsight;
+  } catch (error) {
+    console.error("Error getting industry insights:", error);
+    if (error.message === "Unauthorized" || error.message === "User not found") {
+      throw error;
+    }
+    throw new Error("Failed to fetch industry insights. Please try again later.");
+  }
 }
